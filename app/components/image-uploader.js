@@ -20,8 +20,8 @@ export default Ember.Component.extend({
     // API - START
 
     'upload-preset': '',
-    files: [],
-    limit: 1, // max limit of files
+    uploads: [],
+    limit: 1, // max limit of file uploads
     uploading: false, // indicates whether some file is being uploaded
 
     // API - END
@@ -31,8 +31,8 @@ export default Ember.Component.extend({
     isDraggingOver: false,
 
     uploadingChange: function() {
-        this.set('uploading', this.get('files').some(file => file.get('uploading')));
-    }.observes('files.@each.uploading'),
+        this.set('uploading', this.get('uploads').some(file => file.get('uploading')));
+    }.observes('uploads.@each.uploading'),
 
     dragEnter: function(e) {
 
@@ -85,9 +85,9 @@ export default Ember.Component.extend({
     },
 
     uploadFile: function(file) {
-        var files = this.get('files');
+        var uploads = this.get('uploads');
 
-        if (files.length >= this.get('limit')) {
+        if (uploads.length >= this.get('limit')) {
             return;
         }
 
@@ -97,27 +97,31 @@ export default Ember.Component.extend({
         formData.append("upload_preset", this.get('upload-preset'));
         formData.append('file', file);
 
-        var info = Ember.Object.create({
-            uploading: true,
-            progressPercent: 0
-        });
-        files.pushObject(info);
-
         var xhr = new XMLHttpRequest();
+
+        var upload = Ember.Object.create({
+            uploading: true,
+            progressPercent: 0,
+            abort() {
+                xhr.abort();
+            }
+        });
+        uploads.pushObject(upload);
+
         xhr.open('POST', 'https://api.cloudinary.com/v1_1/' + this.get('cloudName')  + '/image/upload');
 
         xhr.upload.addEventListener('progress', e => {
             if (!e.lengthComputable)
                 return;
 
-            info.set('progressPercent', Math.round(100 * e.loaded / e.total));
+            upload.set('progressPercent', Math.round(100 * e.loaded / e.total));
         }, false);
 
         xhr.addEventListener('load', e => {
             var response = JSON.parse(e.target.responseText);
 
             if (e.target.status !== 200 && e.target.status !== 201) {
-                info.setProperties({
+                upload.setProperties({
                     uploading: false,
                     progressPercent: null,
                     uploadError: response.error.message
@@ -125,27 +129,31 @@ export default Ember.Component.extend({
                 return;
             }
 
-            info.setProperties({
+            upload.setProperties({
                 uploading: false,
                 progressPercent: null,
                 url: response.secure_url
             });
+
+            this.sendAction('uploadFinished', upload);
         }, false);
 
         xhr.addEventListener('error', e => {
-            info.setProperties({
+            upload.setProperties({
                 uploading: false,
                 progressPercent: null,
                 uploadError: 'There was an unexpected upload error.'
             });
+            this.sendAction('uploadError', upload);
         }, false);
 
         xhr.addEventListener('abort', e => {
-            info.setProperties({
+            upload.setProperties({
                 uploading: false,
                 progressPercent: null,
                 uploadError: 'Upload was aborted.'
             });
+            this.sendAction('uploadAborted', upload);
         }, false);
 
         xhr.send(formData);
