@@ -22,12 +22,17 @@ export default Ember.Component.extend({
     'upload-preset': '',
     files: [],
     limit: 1, // max limit of files
+    uploading: false, // indicates whether some file is being uploaded
 
     // API - END
 
     _ignoreNextLeave: false,
 
     isDraggingOver: false,
+
+    uploadingChange: function() {
+        this.set('uploading', this.get('files').some(file => file.get('uploading')));
+    }.observes('files.@each.uploading'),
 
     dragEnter: function(e) {
 
